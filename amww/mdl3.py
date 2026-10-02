@@ -48,9 +48,11 @@ import struct
 
 SINGLE = {0x30: 1, 0x34: 0, 0x38: 3, 0x3C: 2}
 PAIR = {0x40: (0, 1), 0x44: (3, 0), 0x48: (2, 3), 0x4C: (3, 1)}
-# texture-coordinate / colour register -> corner, per primitive type
-QUAD_ATTR = {0: 0, 1: 1, 2: 2, 3: 3}
-TRI_ATTR = {0: 0, 1: 1, 2: 3}
+# Texture-coordinate / colour register for each corner. Each vertex register
+# has a partner (0x30/B-0x20, 0x34/A-0x24, 0x38/D-0x28, 0x3C/C-0x2C): the
+# streams write a corner's UV right before its vertex index.
+QUAD_ATTR = {0: 1, 1: 0, 2: 3, 3: 2}  # corners A,B,C,D
+TRI_ATTR = {0: 1, 1: 0, 2: 2}  # corners A,B,D
 
 
 class TexSlot:

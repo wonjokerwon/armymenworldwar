@@ -50,7 +50,7 @@ class Mdl3Test(unittest.TestCase):
         self.assertEqual([p[0] for p in m.polys],
                          [[0, 1, 5, 4], [4, 7, 6, 4], [4, 3, 6, 1]])
         # flag bit 0 = stored with reversed winding; corner 0 stays first
-        self.assertEqual(m.polys[0][1], [(0, 0), (31, 0), (31, 31), (0, 31)])
+        self.assertEqual(m.polys[0][1], [(0, 31), (31, 31), (31, 0), (0, 0)])
         self.assertEqual(m.slots[0].clut, 0x367F)
         self.assertEqual((m.slots[0].u, m.slots[0].v, m.slots[0].tpage), (32, 64, 0x0B))
 
@@ -65,9 +65,22 @@ class Mdl3Test(unittest.TestCase):
         self.assertEqual([p[0] for p in m.polys],
                          [[1, 2, 0], [2, 3, 0], [3, 4, 0], [4, 1, 0], [3, 0, 1], [3, 1, 2]])
 
+    def test_triangle_uv_pairing(self):
+        # each corner's UV comes from its partner register:
+        # B(0x30)-0x20, A(0x34)-0x24, D(0x38)-0x28
+        verts = [(0, 0, 0), (10, 0, 0), (0, -10, 0)]
+        s = w(0x5C, 0x80 << 16) + w(0x58, 0)
+        s += w(0x24, 1 | 1 << 8) + w(0x34, 0)
+        s += w(0x20, 2 | 2 << 8) + w(0x30, 1)
+        s += w(0x28, 3 | 3 << 8) + w(0x38, 2, 2)  # flag 2: stored winding
+        m = parse_mdl3(build_mdl3(verts, s))
+        self.assertEqual(m.polys[0][0], [0, 1, 2])
+        self.assertEqual(m.polys[0][1], [(1, 1), (2, 2), (3, 3)])
+
     def test_untextured_and_export(self):
         verts = [(0, 0, 0), (10, 0, 0), (0, -10, 0)]
-        s = w(0x5C, 0x40 << 16) + pair(0x40, 0, 1) + w(0x38, 2) + w(0x00, 0x0000FF, 1)
+        s = w(0x5C, 0x40 << 16) + pair(0x40, 0, 1) + w(0x38, 2)
+        s += w(0x00, 0x0000FF) + w(0x04, 0x0000FF) + w(0x08, 0x0000FF, 1)
         m = parse_mdl3(build_mdl3(verts, s))
         self.assertEqual(m.polys[0][3], -1)
         with tempfile.TemporaryDirectory() as d:
