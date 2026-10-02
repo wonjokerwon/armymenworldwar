@@ -7,9 +7,11 @@ import numpy as np
 from .wav import write_png
 
 
-def render(tris, textures, size=256, yaw=0.6, pitch=0.45):
+def render(tris, textures, size=256, yaw=0.6, pitch=0.45, cull=True):
     """tris: list of (xyz[3], uv[3] in 0..1, texture key or None).
-    textures: key -> (H, W, 4) uint8 array. Returns RGBA bytes."""
+    textures: key -> (H, W, 4) uint8 array. Returns RGBA bytes.
+    cull=True hides back faces like most model viewers do, so winding
+    mistakes show up as holes."""
     if not tris:
         return bytes(size * size * 4)
     pts = np.array([t[0] for t in tris], dtype=np.float64).reshape(-1, 3)
@@ -39,8 +41,8 @@ def render(tris, textures, size=256, yaw=0.6, pitch=0.45):
             continue
         gx, gy = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
         d = (sy2[1] - sy2[2]) * (sx[0] - sx[2]) + (sx[2] - sx[1]) * (sy2[0] - sy2[2])
-        if abs(d) < 1e-9:
-            continue
+        if abs(d) < 1e-9 or (cull and d > 0):
+            continue  # degenerate, or back-facing (counter-clockwise is front)
         w0 = ((sy2[1] - sy2[2]) * (gx - sx[2]) + (sx[2] - sx[1]) * (gy - sy2[2])) / d
         w1 = ((sy2[2] - sy2[0]) * (gx - sx[2]) + (sx[0] - sx[2]) * (gy - sy2[2])) / d
         w2 = 1 - w0 - w1

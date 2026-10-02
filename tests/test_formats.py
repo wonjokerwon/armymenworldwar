@@ -48,8 +48,9 @@ class Mdl3Test(unittest.TestCase):
         data = build_mdl3(verts, s, [(32, 64, 0x0B, 0x367F)])
         m = parse_mdl3(data)
         self.assertEqual([p[0] for p in m.polys],
-                         [[0, 4, 5, 1], [4, 4, 6, 7], [4, 1, 6, 3]])
-        self.assertEqual(m.polys[0][1], [(0, 0), (0, 31), (31, 31), (31, 0)])
+                         [[0, 1, 5, 4], [4, 7, 6, 4], [4, 3, 6, 1]])
+        # flag bit 0 = stored with reversed winding; corner 0 stays first
+        self.assertEqual(m.polys[0][1], [(0, 0), (31, 0), (31, 31), (0, 31)])
         self.assertEqual(m.slots[0].clut, 0x367F)
         self.assertEqual((m.slots[0].u, m.slots[0].v, m.slots[0].tpage), (32, 64, 0x0B))
 
@@ -62,7 +63,7 @@ class Mdl3Test(unittest.TestCase):
         s += w(0x34, 3, 2) + w(0x30, 2, 1)
         m = parse_mdl3(build_mdl3(verts, s))
         self.assertEqual([p[0] for p in m.polys],
-                         [[1, 0, 2], [2, 0, 3], [3, 0, 4], [4, 0, 1], [3, 0, 1], [3, 2, 1]])
+                         [[1, 2, 0], [2, 3, 0], [3, 4, 0], [4, 1, 0], [3, 0, 1], [3, 1, 2]])
 
     def test_untextured_and_export(self):
         verts = [(0, 0, 0), (10, 0, 0), (0, -10, 0)]
@@ -74,7 +75,7 @@ class Mdl3Test(unittest.TestCase):
             obj = open(os.path.join(d, "t.obj")).read()
             mtl = open(os.path.join(d, "t.mtl")).read()
         self.assertIn("v 0 10 0", obj)
-        self.assertIn("f 1/1 2/2 3/3", obj)
+        self.assertIn("f 1/1 3/2 2/3", obj)
         self.assertIn("Kd 1.000 0.000 0.000", mtl)
 
     def test_bad_header(self):
@@ -144,7 +145,7 @@ class AmdlTest(unittest.TestCase):
         a = self.make()
         self.assertEqual(a.parents, [-1, 0])
         self.assertEqual(a.model.groups[0][2], "torso")
-        self.assertEqual([p[0] for p in a.model.polys], [[0, 1, 2]])
+        self.assertEqual([p[0] for p in a.model.polys], [[0, 2, 1]])
         self.assertEqual(a.posed_vertices(), [(0, 0, 0), (10, 100, 0), (0, 110, 0)])
         self.assertEqual(a.variants[0][0].clut, 0x7F)
 

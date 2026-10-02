@@ -136,6 +136,7 @@ def parse_amdl(buf, off):
 # Parts shown on a normal soldier; the rest are alternate weapons and
 # damage/dismemberment pieces the game switches on as needed.
 DEFAULT_PARTS = {"base", "torso", "arms", "legs", "sarges bk", "torso back", "torso side",
+                 "frnt blwwy", "bk blwawy", "brkawy sd",
                  "helmet", "face", "m16 side", "m16 top", "m-16 end"}
 
 # Y-down PS1 space -> Y-up (x, -y, -z)

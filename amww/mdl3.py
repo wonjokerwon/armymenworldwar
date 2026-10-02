@@ -13,7 +13,8 @@ Reverse-engineered layout:
 
 Each command word is a register write: the low byte is the register address
 (low 2 bits are flags), the upper 24 bits are the value. Any write whose
-flag bits are non-zero emits a polygon from the current register state.
+flag bits are non-zero emits a polygon from the current register state;
+bit 0 set means the polygon is stored with reversed winding.
 
   0x00-0x0C  vertex colours (r, g, b)
   0x20-0x2C  texture coordinates (u, v)
@@ -129,8 +130,16 @@ def parse_mdl3(buf, off=0):
                 corners = [idx[0], idx[1], idx[3]]
                 attrs = [TRI_ATTR[k] for k in range(3)]
             if all(c < nv for c in corners):
-                polys.append((corners, [uv[a] for a in attrs],
-                              [col[a] for a in attrs], page if textured else -1))
+                uvs = [uv[a] for a in attrs]
+                cols = [col[a] for a in attrs]
+                if flags & 1:
+                    # strip parity: bit 0 marks a polygon stored with the
+                    # opposite winding, so flip it to face outwards (keeping
+                    # corner 0 first, as its colour is the flat-shade colour)
+                    corners = corners[:1] + corners[:0:-1]
+                    uvs = uvs[:1] + uvs[:0:-1]
+                    cols = cols[:1] + cols[:0:-1]
+                polys.append((corners, uvs, cols, page if textured else -1))
     nslots = max([pg for _, _, _, pg in polys] + [-1]) + 1
     slots = []
     for i in range(nslots):
