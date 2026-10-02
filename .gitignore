@@ -1,0 +1,13 @@
+# Game data is copyrighted: never commit disc images or extracted assets.
+*.chd
+*.cue
+*.bin
+*.iso
+*.img
+*.7z
+*.7z.*
+*.zip
+extracted/
+out/
+__pycache__/
+*.pyc

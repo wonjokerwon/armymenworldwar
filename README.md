@@ -1,0 +1,87 @@
+# amww: Army Men: World War – Team Assault asset extractor
+
+A dependency-free Python toolkit that turns a PlayStation disc image of
+*Army Men: World War – Team Assault* (SLUS-01435) into ordinary files:
+
+| Game data | Output |
+|---|---|
+| `3MDL` models in the level `.DAT` files (~2,550) | Wavefront **OBJ + MTL + PNG**, textured, named (`GN_BOX02`, `G1_ROK01`, …) |
+| Level texture VRAM (`.VR1` / `.VR2`) | PNG texture pages, decoded with the right palette per model |
+| `TIM` images | PNG (every palette) |
+| `3HEX` menu textures (4bpp) | PNG |
+| `VAB` sound banks | WAV per sample |
+| `XA` music (`AMFF*.XA`) | WAV per channel/track |
+| `STR` movies | MP4 (via ffmpeg) |
+| CD-DA tracks | WAV |
+
+It also handles generic PS1 formats (TMD models, VAG, SEQ → MIDI), so it is
+useful on other PS1 games too, and it writes a `REPORT.md` listing anything
+it couldn't decode.
+
+**No game data is included in this repository**, and none should be committed.
+You need your own disc image (`.chd`, `.cue/.bin` or `.iso`).
+
+## Requirements
+
+* Python 3.8+
+* `chdman` for `.chd` images (`apt install mame-tools`, `brew install rom-tools`,
+  or `chdman.exe` from a MAME release)
+* `ffmpeg` for STR/XA conversion (optional)
+* `numpy` for the `_preview.png` contact sheets (optional)
+
+## Usage
+
+```sh
+python -m amww extract "Army Men - World War - Team Assault (USA).chd" -o extracted
+```
+
+Or, if you've already extracted the disc's files with another tool:
+
+```sh
+python -m amww scan path/to/disc/files -o extracted
+```
+
+Output layout:
+
+```
+extracted/
+  REPORT.md, manifest.json      what was found / what wasn't
+  files/                        the disc's filesystem
+  models/<LEVEL>/NNN_NAME.obj   3MDL models (+ .mtl, tex/*.png, _preview.png)
+  textures/                     TIM and 3HEX images
+  audio/vab/                    sound effects
+  music/XA/                     soundtrack, one WAV per XA channel
+  video/                        FMV as MP4
+```
+
+OBJ files are Y-up (PS1's Y-down axis is flipped) in the game's native units.
+Import them into Blender with *File → Import → Wavefront (.obj)*.
+
+## The 3MDL format
+
+Worked out from the disc data; documented in [`amww/mdl3.py`](amww/mdl3.py).
+In short: a header, a vertex list, then a stream of 32-bit register writes
+(UVs at `0x20–0x2C`, colours at `0x00–0x0C`, vertex indices at `0x30–0x4C`,
+texture slot `0x58`, render mode `0x5C`). A write with either low flag bit set
+emits a polygon. The model is followed by 20-byte texture-slot records (UV
+offset, texture page, CLUT). Level VRAM comes from `.VR1`/`.VR2`, which are
+256×512-halfword dumps placed at VRAM x=512 and x=768.
+
+## Known gaps
+
+* Vehicle parts render grey: they likely use palettes the game fills in at
+  runtime (team colours).
+* Type-2 `3HEX` images (the 18 full-screen menu backgrounds) aren't decoded yet.
+* The level terrain/heightmap and the animated soldier characters live in
+  formats that haven't been reverse-engineered yet.
+* VAB samples are written at 22,050 Hz (`--vab-rate` to change); VAB files
+  don't store the original rate.
+
+## Tests
+
+```sh
+python -m unittest discover tests
+```
+
+The tests build a synthetic PS1 disc and synthetic 3MDL/3HEX data; no game
+data is needed.
