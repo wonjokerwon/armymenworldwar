@@ -7,6 +7,7 @@ can be found by magic number + structural validation.
 
 import math
 
+from .amdl import parse_amdl
 from .audio import parse_vab, parse_vag, seq_to_midi
 from .hex3 import parse_hex3
 from .mdl3 import parse_mdl3
@@ -22,6 +23,7 @@ SIGNATURES = (
     # 3DO's own formats used by Army Men: World War - Team Assault
     ("mdl3", b"3MDL", parse_mdl3),
     ("hex3", b"3HEX", parse_hex3),
+    ("amdl", b"AMDL", parse_amdl),
 )
 
 
@@ -48,7 +50,7 @@ def scan_buffer(buf):
         while pos >= 0:
             # TIM/TMD headers are word-aligned in practice; requiring that
             # cuts false positives in random data by 4x.
-            if kind in ("tim", "tmd", "mdl3") and pos % 4:
+            if kind in ("tim", "tmd", "mdl3", "amdl") and pos % 4:
                 pos = buf.find(magic, pos + 1)
                 continue
             try:

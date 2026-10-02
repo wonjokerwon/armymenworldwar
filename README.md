@@ -6,6 +6,7 @@ A dependency-free Python toolkit that turns a PlayStation disc image of
 | Game data | Output |
 |---|---|
 | `3MDL` models in the level `.DAT` files (~2,550) | Wavefront **OBJ + MTL + PNG**, textured, named (`GN_BOX02`, `G1_ROK01`, …) |
+| `AMDL` soldiers and vehicles-with-driver | Rigged **glTF (.glb)** with the 23-bone skeleton, plus OBJ, per team colour |
 | Level texture VRAM (`.VR1` / `.VR2`) | PNG texture pages, decoded with the right palette per model |
 | `TIM` images | PNG (every palette) |
 | `3HEX` menu textures (4bpp) | PNG |
@@ -48,6 +49,9 @@ extracted/
   REPORT.md, manifest.json      what was found / what wasn't
   files/                        the disc's filesystem
   models/<LEVEL>/NNN_NAME.obj   3MDL models (+ .mtl, tex/*.png, _preview.png)
+  models/characters/<name>/     AMDL characters: <name>_<colour>.glb (rigged,
+                                every part a separate mesh), .obj (default
+                                look), _allparts.obj (every part as an object)
   textures/                     TIM and 3HEX images
   audio/vab/                    sound effects
   music/XA/                     soundtrack, one WAV per XA channel
@@ -67,13 +71,30 @@ emits a polygon. The model is followed by 20-byte texture-slot records (UV
 offset, texture page, CLUT). Level VRAM comes from `.VR1`/`.VR2`, which are
 256×512-halfword dumps placed at VRAM x=512 and x=768.
 
+## The AMDL format (characters)
+
+Documented in [`amww/amdl.py`](amww/amdl.py). It's the 3MDL mesh format with
+a bone index on every vertex, followed by a skeleton (parent table plus a
+3×3 rotation and translation per bone) and one set of texture slots per team
+colour (green and tan share textures and differ only in palette). The mesh is
+split into named, toggleable parts: body (`torso`, `arms`, `legs`, `helmet`,
+`face`…), weapons (`m16 side`, `sniper`, `bzooka sd`, `mortar`, `mine swpr`,
+`flmr tnks`…) and damage pieces (`frnt blwwy`, `brkawy sd`, `neck cap`…).
+The `.obj` shows the body plus the M16; the `.glb` and `_allparts.obj`
+contain every part so you can switch weapons or damage on and off.
+
+There are three detail levels (328/261/173 polygons) in two sizes, shared by
+every level, plus rigid single-bone vehicle-with-driver models on some
+levels (their wheels and guns are separate 3MDL models).
+
 ## Known gaps
 
 * Vehicle parts render grey: they likely use palettes the game fills in at
   runtime (team colours).
 * Type-2 `3HEX` images (the 18 full-screen menu backgrounds) aren't decoded yet.
-* The level terrain/heightmap and the animated soldier characters live in
-  formats that haven't been reverse-engineered yet.
+* Character animations haven't been found yet; soldiers export in their
+  T-pose bind pose (the rig is included, so they can be posed in Blender).
+* The level terrain/heightmap format hasn't been reverse-engineered yet.
 * VAB samples are written at 22,050 Hz (`--vab-rate` to change); VAB files
   don't store the original rate.
 

@@ -60,6 +60,8 @@ class TexSlot:
 
 
 class Mdl3:
+    groups = ()  # (mask, part number, name, first polygon index)
+
     def __init__(self, vertices, polys, size, unknown, slots):
         self.vertices = vertices
         self.polys = polys  # list of (indices, uvs, colors, slot)
@@ -90,6 +92,7 @@ def parse_mdl3(buf, off=0):
     quads = False
     textured = True
     polys = []
+    groups = []
     p = off + 24 + nv * 8
     stop = off + size
     while p + 4 <= stop:
@@ -98,6 +101,12 @@ def parse_mdl3(buf, off=0):
         op, flags, val = w & 0xFC, w & 3, w >> 8
         if op == 0x68:
             break
+        if op == 0x70:  # named part group: u32 part, u32 0, char name[16]
+            groups.append((val, struct.unpack_from("<I", buf, p)[0],
+                           bytes(buf[p + 8:p + 24]).replace(b"\0", b" ").decode("latin-1").strip(),
+                           len(polys)))
+            p += 24
+            continue
         if op in PAIR:
             a, b = PAIR[op]
             idx[a], idx[b] = val & 0xFFF, val >> 12
@@ -130,7 +139,9 @@ def parse_mdl3(buf, off=0):
             break
         u, v, tpage, clut = struct.unpack_from("<BBHH", buf, q)
         slots.append(TexSlot(u, v, tpage & 0x7FFF, clut))
-    return Mdl3(verts, polys, size, unknown, slots)
+    model = Mdl3(verts, polys, size, unknown, slots)
+    model.groups = groups
+    return model
 
 
 def export_obj(model, path, texture_for=None, name="model"):

@@ -33,6 +33,7 @@ class Extractor:
         self.global_vram = Vram()
         self.pending_models = []  # (rel, found, file_vram)
         self.pending_mdl3 = defaultdict(list)  # source rel -> [(offset, Mdl3)]
+        self.pending_amdl = []  # (source rel, offset, Amdl, raw bytes)
 
     def p(self, *parts):
         path = os.path.join(self.out, *parts)
@@ -127,6 +128,8 @@ class Extractor:
                                 f.obj.attach_bodies(fh.read())
                             break
                 self.write_vab(f.obj, sub, tag)
+            elif f.kind == "amdl":
+                self.pending_amdl.append((rel, f.offset, f.obj, bytes(buf[f.offset - 8:f.offset + f.size])))
             elif f.kind == "mdl3":
                 self.pending_mdl3[rel].append((f.offset, f.obj))
             elif f.kind == "hex3":
@@ -217,6 +220,61 @@ class Extractor:
                 group, len(sheet), " (textured from %s.VR1/VR2)" % os.path.basename(stem)
                 if vram else ""))
 
+    def write_characters(self, root):
+        """Export each distinct AMDL character once (they repeat per level)."""
+        import hashlib
+        from .amdl import export_amdl
+        seen = {}
+        for rel, off, a, raw in self.pending_amdl:
+            seen.setdefault(hashlib.md5(raw).hexdigest(), (rel, off, a))
+        chars = list(seen.values())
+        heights = {}
+        for rel, off, a in chars:
+            ys = [v[1] for v in a.posed_vertices()]
+            heights[id(a)] = max(ys) - min(ys)
+        rigged = [heights[id(a)] for _, _, a in chars if len(a.locals) > 1]
+        base_h = min(rigged) if rigged else 1
+        out_root = self.p("models", "characters", "x")[:-2]
+        previews = []
+        used = set()
+        for rel, off, a in chars:
+            stem = os.path.splitext(rel)[0]
+            level = os.path.basename(stem)
+            npoly = len(a.model.polys)
+            if len(a.locals) > 1:
+                kind = "soldier_large" if heights[id(a)] > base_h * 1.1 else "soldier"
+                name = "%s_%dpoly" % (kind, npoly)
+            else:
+                name = "vehicle_with_driver_%s" % level
+            while name in used:
+                name += "_b"
+            used.add(name)
+            vram = level_vram(os.path.join(root, stem))
+            out_dir = os.path.join(out_root, name)
+            os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
+            pngs = {}
+
+            def texture_png(tpage, clut, out_dir=out_dir, vram=vram, pngs=pngs):
+                relp = "tex/%04x_%04x.png" % (tpage, clut)
+                if relp not in pngs:
+                    path = os.path.join(out_dir, relp)
+                    write_png(path, 256, 256, vram.texture(tpage, clut))
+                    with open(path, "rb") as fh:
+                        pngs[relp] = fh.read()
+                return relp, pngs[relp]
+
+            for slots in (a.variants or [[]]):
+                row = (slots[0].clut >> 6) if slots else 0
+                colour = {1: "green", 2: "tan"}.get(row, "clut%04x" % slots[0].clut if slots else "plain")
+                base = os.path.join(out_dir, "%s_%s" % (name, colour))
+                export_amdl(a, base, slots, texture_png if vram else None, rigid=len(a.locals) == 1)
+                previews.append(base + ".obj")
+                self.counts["characters"] += 1
+            log("[chars]    %-28s %d colour variant(s), %d bones (from %s)" % (
+                name, len(a.variants), len(a.locals), level))
+        if previews:
+            write_contact_sheet(previews, os.path.join(out_root, "_preview.png"), tile=200, cols=6)
+
     def convert_streams(self, raw_files):
         for rel, path in raw_files:
             if not self.media:
@@ -237,7 +295,7 @@ class Extractor:
         files = self.manifest["files"]
         lines = ["# Extraction report", ""]
         lines += ["| Asset | Count |", "|---|---|"]
-        for k in ("tim", "hex3", "mdl3", "mdl3_textured", "mdl3_polygons", "tmd",
+        for k in ("tim", "hex3", "mdl3", "mdl3_textured", "mdl3_polygons", "characters", "tmd",
                   "polygons", "vag", "vab", "vab_samples", "seq",
                   "cdda", "stream_outputs"):
             lines.append("| %s | %d |" % (k, self.counts[k]))
@@ -421,6 +479,9 @@ def main(argv=None):
     n3 = sum(len(v) for v in ex.pending_mdl3.values())
     log("[models] exporting %d 3MDL model(s) ..." % n3)
     ex.write_mdl3(root)
+    if ex.pending_amdl:
+        log("[chars] exporting characters ...")
+        ex.write_characters(root)
     if raw:
         log("[media] converting %d XA/STR stream file(s) ..." % len(raw))
         ex.convert_streams(raw)
