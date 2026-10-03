@@ -8,7 +8,7 @@ byte size of the object's 3MDL model), then a chain of sections, each
 ending with id 18 (the models). Known sections:
 
   8   object placements, 22-byte records of i16:
-        x, y, z            position: x/z in 1/64 of a terrain cell, y (down)
+        x, y, z            position: x/z in 1/64 of a terrain cell, y (up)
                            in model units (16x finer)
         x, y, z            repeated (start position)
         flags
@@ -20,7 +20,8 @@ ending with id 18 (the models). Known sections:
       Model vertices are in units of 1/16 world unit.
   10  terrain: 256 x 128 cells of 4 bytes, row-major (row = z / 64,
       column = x / 64), followed by a 5140-byte table:
-        byte 0  height; y = byte * 64 (model units, Y down)
+        byte 0  height; y = byte * 64 (model units, larger = higher:
+                water has the lowest values)
         byte 1  ground tile (48x48 4bpp texture, 25 per texture page in
                 pages 13, 14, 15, 29, 30, 31; palette row 12 + tile at x=1008)
         byte 2  flags (top two bits vary per cell; meaning not confirmed)
@@ -150,9 +151,10 @@ def _png_bytes(w, h, rgba):
 def _conv(x, y, z):
     """Level space -> glTF. X/Z positions count 1/64 of a terrain cell while
     heights (placement Y, terrain bytes * 64) are in the 16x finer model
-    units, so Y is divided by 16 to keep the scene in proportion. PS1 Y is
-    down; glTF Y is up."""
-    return (x, -y * MODEL_SCALE, -z)
+    units, so Y is divided by 16 to keep the scene in proportion. Level
+    heights grow upwards (water has the smallest values), unlike model
+    vertices, whose Y points down."""
+    return (x, y * MODEL_SCALE, -z)
 
 
 def terrain_atlas(lv, vram):
@@ -266,7 +268,7 @@ def heightmap_png(lv):
     lo, hi = min(hs), max(hs)
     rng = max(1, hi - lo)
     rgba = b"".join(bytes((v, v, v, 255)) for v in
-                    (255 - (h - lo) * 255 // rng for h in hs))
+                    ((h - lo) * 255 // rng for h in hs))
     return _png_bytes(GRID_W, GRID_H, rgba)
 
 
