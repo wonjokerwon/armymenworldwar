@@ -187,7 +187,7 @@ class LevelTest(unittest.TestCase):
         hdr = struct.pack("<11I", 6, 28, len(names), 1, 0, 0, 0, 0, 0, 7, len(names) * 52)
         table = b"".join(n.ljust(8, b"\0") + struct.pack("<11I", 0, 0, 0, 0, 0, size, 0, 0, 0, 0, 0)
                          for n, size in names)
-        rec = struct.pack("<11h", 640, 7680, 1280, 640, 7680, 1280, 0x3F1, 0x1040, 1, 0, 6144)
+        rec = struct.pack("<11h", 640, 7680, 1280, 640, 7680, 1280, 0x3F1, 0x1010, 1, 0, 6144)
         sec8 = struct.pack("<II", 8, 44) + rec + bytes(22)
         grid = bytearray(256 * 128 * 4)
         grid[(20 * 256 + 10) * 4:(20 * 256 + 10) * 4 + 4] = bytes((120, 7, 0x40, 0xC7))
@@ -201,7 +201,7 @@ class LevelTest(unittest.TestCase):
         self.assertEqual(len(lv.placements), 1)  # the all-zero record is skipped
         pl = lv.placements[0]
         self.assertEqual((pl.name, pl.x, pl.y, pl.z, pl.scale), ("E3_TRE00", 640, 7680, 1280, 1.5))
-        self.assertAlmostEqual(pl.angle, 0x40 / 256 * 2 * 3.141592653589793)
+        self.assertAlmostEqual(pl.angle, 16 / 64 * 2 * 3.141592653589793)  # 16/64 turn
         self.assertEqual(cell(lv, 20, 10), (120, 7, 0x40, 0xC7))
         self.assertEqual(sorted(lv.sections), [8, 10, 18])
 

@@ -173,7 +173,8 @@ def write_scene_glb(path, meshes, materials, nodes):
         if any(t):
             node["translation"] = [float(v) for v in t]
         if yaw:
-            node["rotation"] = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+            # level yaw turns the opposite way to a glTF rotation about +Y
+            node["rotation"] = [0.0, math.sin(-yaw / 2), 0.0, math.cos(-yaw / 2)]
         if scale != 1.0:
             node["scale"] = [scale] * 3
         gl["nodes"].append(node)

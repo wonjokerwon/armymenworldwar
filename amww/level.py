@@ -12,8 +12,10 @@ ending with id 18 (the models). Known sections:
                            in model units (16x finer)
         x, y, z            repeated (start position)
         flags
-        (scale & 0xFF00) | angle   angle in 1/256 turns about the vertical
-                           axis (checked against walls lining a trench)
+        (scale & 0xFF00) | angle   angle (low 6 bits) in 1/64 turns about
+                           the vertical axis; models turn clockwise seen
+                           from above (checked by joining wall segments
+                           end to end)
         type               low byte: index into the name table
         0
         scale              4096 = 1.0
@@ -80,7 +82,7 @@ def parse_level(buf):
             pl = Placement()
             pl.x, pl.y, pl.z = r[0], r[1], r[2]
             pl.flags = r[6] & 0xFFFF
-            pl.angle = (r[7] & 0xFF) / 256.0 * 2 * math.pi
+            pl.angle = (r[7] & 0x3F) / 64.0 * 2 * math.pi
             pl.type = r[8] & 0xFF
             pl.scale = (r[10] or 4096) / 4096.0
             pl.name = lv.names[pl.type][0] if pl.type < len(lv.names) else None
