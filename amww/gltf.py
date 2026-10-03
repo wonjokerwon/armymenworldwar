@@ -107,3 +107,87 @@ def write_glb(path, meshes, materials, joints=None):
         fh.write(struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(bin_)))
         fh.write(struct.pack("<II", len(js), 0x4E4F534A) + js)
         fh.write(struct.pack("<II", len(bin_), 0x004E4942) + bin_)
+
+
+def write_scene_glb(path, meshes, materials, nodes):
+    """Static scene: meshes are (name, positions, uvs, {material: tris}),
+    nodes are (name, mesh index, translation, yaw radians, uniform scale).
+    Several nodes may share one mesh (instancing)."""
+    import math
+    gl = {"asset": {"version": "2.0", "generator": "amww"},
+          "scene": 0, "scenes": [{"nodes": []}], "nodes": [], "meshes": [],
+          "buffers": [], "bufferViews": [], "accessors": [],
+          "materials": [], "textures": [], "images": [],
+          "samplers": [{"magFilter": 9728, "minFilter": 9728}]}
+    blob = bytearray()
+
+    def view(data, target=None):
+        blob.extend(b"\0" * (-len(blob) % 4))
+        v = {"buffer": 0, "byteOffset": len(blob), "byteLength": len(data)}
+        if target:
+            v["target"] = target
+        blob.extend(data)
+        gl["bufferViews"].append(v)
+        return len(gl["bufferViews"]) - 1
+
+    def accessor(fmt, comps, ctype, rows, target=None, minmax=False):
+        data = struct.pack("<%d%s" % (len(rows) * comps, fmt), *[x for r in rows for x in r])
+        a = {"bufferView": view(data, target), "componentType": ctype, "count": len(rows),
+             "type": {1: "SCALAR", 2: "VEC2", 3: "VEC3"}[comps]}
+        if minmax:
+            a["min"] = [min(r[i] for r in rows) for i in range(comps)]
+            a["max"] = [max(r[i] for r in rows) for i in range(comps)]
+        gl["accessors"].append(a)
+        return len(gl["accessors"]) - 1
+
+    for name, png, factor in materials:
+        m = {"name": name, "doubleSided": True, "alphaMode": "MASK", "alphaCutoff": 0.5,
+             "pbrMetallicRoughness": {"baseColorFactor": list(factor),
+                                      "metallicFactor": 0.0, "roughnessFactor": 1.0}}
+        if png:
+            gl["images"].append({"bufferView": view(png), "mimeType": "image/png"})
+            gl["textures"].append({"source": len(gl["images"]) - 1, "sampler": 0})
+            m["pbrMetallicRoughness"]["baseColorTexture"] = {"index": len(gl["textures"]) - 1}
+        gl["materials"].append(m)
+
+    mesh_ids = []
+    for name, pos, uvs, tris in meshes:
+        prims = []
+        for mat, faces in tris.items():
+            used = sorted({i for f in faces for i in f})
+            remap = {o: n for n, o in enumerate(used)}
+            attrs = {"POSITION": accessor("f", 3, 5126, [pos[i] for i in used], 34962, True),
+                     "TEXCOORD_0": accessor("f", 2, 5126, [uvs[i] for i in used], 34962)}
+            idx = accessor("I", 1, 5125, [(remap[i],) for f in faces for i in f], 34963)
+            prims.append({"attributes": attrs, "indices": idx, "material": mat})
+        if prims:
+            gl["meshes"].append({"name": name, "primitives": prims})
+            mesh_ids.append(len(gl["meshes"]) - 1)
+        else:
+            mesh_ids.append(None)
+
+    for name, mesh, t, yaw, scale in nodes:
+        if mesh_ids[mesh] is None:
+            continue
+        node = {"name": name or "object", "mesh": mesh_ids[mesh]}
+        if any(t):
+            node["translation"] = [float(v) for v in t]
+        if yaw:
+            node["rotation"] = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+        if scale != 1.0:
+            node["scale"] = [scale] * 3
+        gl["nodes"].append(node)
+        gl["scenes"][0]["nodes"].append(len(gl["nodes"]) - 1)
+
+    for k in ("textures", "images", "materials", "accessors", "bufferViews"):
+        if not gl[k]:
+            del gl[k]
+    if "textures" not in gl:
+        del gl["samplers"]
+    gl["buffers"] = [{"byteLength": len(blob)}]
+    js = _pad(json.dumps(gl, separators=(",", ":")).encode(), b" ")
+    bin_ = _pad(bytes(blob))
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(bin_)))
+        fh.write(struct.pack("<II", len(js), 0x4E4F534A) + js)
+        fh.write(struct.pack("<II", len(bin_), 0x004E4942) + bin_)

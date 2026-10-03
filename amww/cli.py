@@ -216,9 +216,32 @@ class Extractor:
                 sheet.append(path)
             if sheet:
                 write_contact_sheet(sheet, os.path.join(out_dir, "_preview.png"))
+            if vram and rel.upper().endswith(".DAT"):
+                self.write_level(root, rel, stem, vram, models)
             log("[models]   %-24s %4d models%s" % (
                 group, len(sheet), " (textured from %s.VR1/VR2)" % os.path.basename(stem)
                 if vram else ""))
+
+    def write_level(self, root, rel, stem, vram, models):
+        """Terrain + object placements as a glTF scene, plus maps and a CSV."""
+        from . import level as L
+        with open(os.path.join(root, rel), "rb") as fh:
+            lv = L.parse_level(fh.read())
+        if lv is None or lv.cells is None:
+            return
+        name = os.path.basename(stem)
+        out_dir = self.p("levels", name, "x")[:-2]
+        os.makedirs(out_dir, exist_ok=True)
+        n = L.export_level(os.path.join(out_dir, name + ".glb"), lv, vram, models, name)
+        with open(os.path.join(out_dir, "heightmap.png"), "wb") as fh:
+            fh.write(L.heightmap_png(lv))
+        with open(os.path.join(out_dir, "tilemap.png"), "wb") as fh:
+            fh.write(L.tilemap_png(lv, vram))
+        with open(os.path.join(out_dir, "placements.csv"), "w") as fh:
+            fh.write(L.placements_csv(lv))
+        self.counts["levels"] += 1
+        self.counts["placed_objects"] += n
+        log("[level]    %-24s terrain 256x128 + %d placed objects" % (name, n))
 
     def write_characters(self, root):
         """Export each distinct AMDL character once (they repeat per level)."""
@@ -295,7 +318,8 @@ class Extractor:
         files = self.manifest["files"]
         lines = ["# Extraction report", ""]
         lines += ["| Asset | Count |", "|---|---|"]
-        for k in ("tim", "hex3", "mdl3", "mdl3_textured", "mdl3_polygons", "characters", "tmd",
+        for k in ("tim", "hex3", "mdl3", "mdl3_textured", "mdl3_polygons", "characters",
+                  "levels", "placed_objects", "tmd",
                   "polygons", "vag", "vab", "vab_samples", "seq",
                   "cdda", "stream_outputs"):
             lines.append("| %s | %d |" % (k, self.counts[k]))

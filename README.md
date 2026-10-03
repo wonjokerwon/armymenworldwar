@@ -7,6 +7,7 @@ A dependency-free Python toolkit that turns a PlayStation disc image of
 |---|---|
 | `3MDL` models in the level `.DAT` files (~2,550) | Wavefront **OBJ + MTL + PNG**, textured, named (`GN_BOX02`, `G1_ROK01`, …) |
 | `AMDL` soldiers and vehicles-with-driver | Rigged **glTF (.glb)** with the 23-bone skeleton, plus OBJ, per team colour |
+| Level layout (23 levels) | **glTF scene** per level: textured terrain heightmesh + every placed object; heightmap/tilemap PNGs and a placements CSV |
 | Level texture VRAM (`.VR1` / `.VR2`) | PNG texture pages, decoded with the right palette per model |
 | `TIM` images | PNG (every palette) |
 | `3HEX` menu textures (4bpp) | PNG |
@@ -52,6 +53,10 @@ extracted/
   models/characters/<name>/     AMDL characters: <name>_<colour>.glb (rigged,
                                 every part a separate mesh), .obj (default
                                 look), _allparts.obj (every part as an object)
+  levels/<LEVEL>/<LEVEL>.glb    whole level: terrain + placed objects (instanced)
+  levels/<LEVEL>/heightmap.png  256x128 height image (white = high)
+  levels/<LEVEL>/tilemap.png    top-down picture of the ground textures
+  levels/<LEVEL>/placements.csv every object: name, position, yaw, scale
   textures/                     TIM and 3HEX images
   audio/vab/                    sound effects
   music/XA/                     soundtrack, one WAV per XA channel
@@ -87,6 +92,18 @@ There are three detail levels (328/261/173 polygons) in two sizes, shared by
 every level, plus rigid single-bone vehicle-with-driver models on some
 levels (their wheels and guns are separate 3MDL models).
 
+## Level layout
+
+Documented in [`amww/level.py`](amww/level.py). A level `.DAT` is a header,
+the object name table, then a chain of `(id, size)` sections: 8 = object
+placements (position, yaw in 1/256 turns, scale, type), 10 = the 256×128
+terrain grid (height byte ×64, ground-tile index, flags, shade), 15 = the
+collision map, 17 = path nodes, 18 = the models. Terrain cells are 64 units;
+model vertices and heights are in units 16× finer, so the exported scene
+scales models by 1/16 and heights by 1/16 to keep everything in proportion.
+Ground tiles are 48×48 4bpp textures, 25 per page in texture pages 13–15
+and 29–31, with palette row 12 + tile.
+
 ## Known gaps
 
 * Vehicle parts render grey: they likely use palettes the game fills in at
@@ -94,7 +111,13 @@ levels (their wheels and guns are separate 3MDL models).
 * Type-2 `3HEX` images (the 18 full-screen menu backgrounds) aren't decoded yet.
 * Character animations haven't been found yet; soldiers export in their
   T-pose bind pose (the rig is included, so they can be posed in Blender).
-* The level terrain/heightmap format hasn't been reverse-engineered yet.
+* Terrain texturing is approximate: tile choice and palettes come out right
+  for most of the ground (water, grass, sand, roads), but the per-cell flag
+  bits (likely tile rotation/flip) aren't decoded, so transition tiles such
+  as shorelines can look patchy, and a few tiles may use a neighbouring
+  palette. Water is the lake bed; the game draws a water surface on top.
+* Level sections 9 (scripts/units), 13, 14 and 16 aren't decoded, so units
+  and vehicles that spawn via scripts aren't placed in the level scenes.
 * VAB samples are written at 22,050 Hz (`--vab-rate` to change); VAB files
   don't store the original rate.
 

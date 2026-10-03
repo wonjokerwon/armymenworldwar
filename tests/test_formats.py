@@ -179,3 +179,33 @@ class AmdlTest(unittest.TestCase):
         self.assertEqual([m["name"] for m in js["meshes"]], ["torso"])
         self.assertIn("v 10 -100 -0", obj.replace("v 10 -100 0", "v 10 -100 -0"))
         self.assertIn("o torso", obj)
+
+
+class LevelTest(unittest.TestCase):
+    def build(self):
+        names = [(b"GN_BOX02", 96), (b"E3_TRE00", 128)]
+        hdr = struct.pack("<11I", 6, 28, len(names), 1, 0, 0, 0, 0, 0, 7, len(names) * 52)
+        table = b"".join(n.ljust(8, b"\0") + struct.pack("<11I", 0, 0, 0, 0, 0, size, 0, 0, 0, 0, 0)
+                         for n, size in names)
+        rec = struct.pack("<11h", 640, 7680, 1280, 640, 7680, 1280, 0x3F1, 0x1040, 1, 0, 6144)
+        sec8 = struct.pack("<II", 8, 44) + rec + bytes(22)
+        grid = bytearray(256 * 128 * 4)
+        grid[(20 * 256 + 10) * 4:(20 * 256 + 10) * 4 + 4] = bytes((120, 7, 0x40, 0xC7))
+        sec10 = struct.pack("<II", 10, len(grid) + 5140) + bytes(grid) + bytes(5140)
+        return hdr + table + sec8 + sec10 + struct.pack("<II", 18, 0)
+
+    def test_parse(self):
+        from amww.level import cell, parse_level
+        lv = parse_level(self.build())
+        self.assertEqual([n for n, _ in lv.names], ["GN_BOX02", "E3_TRE00"])
+        self.assertEqual(len(lv.placements), 1)  # the all-zero record is skipped
+        pl = lv.placements[0]
+        self.assertEqual((pl.name, pl.x, pl.y, pl.z, pl.scale), ("E3_TRE00", 640, 7680, 1280, 1.5))
+        self.assertAlmostEqual(pl.angle, 0x40 / 256 * 2 * 3.141592653589793)
+        self.assertEqual(cell(lv, 20, 10), (120, 7, 0x40, 0xC7))
+        self.assertEqual(sorted(lv.sections), [8, 10, 18])
+
+    def test_csv(self):
+        from amww.level import parse_level, placements_csv
+        csv = placements_csv(parse_level(self.build()))
+        self.assertIn("E3_TRE00,1,640,7680,1280,90.00,1.5000,0x03f1", csv)
